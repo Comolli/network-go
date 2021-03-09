@@ -1,11 +1,11 @@
 package network_go
 
 import (
-	"errors"
+	"fmt"
 	"net"
+	"os"
 	"syscall"
 )
-
 
 type ListenWrapper struct {
 	ReusePort   bool
@@ -45,19 +45,21 @@ func (lw *ListenWrapper) fdSetup(fd int, socket_addr syscall.Sockaddr, addr stri
 	if err = syscall.Bind(fd, socket_addr); err != nil {
 		return fmt.Errorf("cannot bind to %q: %s", addr, err)
 	}
-	
-	if lw.BackLog <= 0 {
+
+	backlog := lw.BackLog
+	if backlog <= 0 {
 		if backlog, err = soMaxConn(); err != nil {
 			return fmt.Errorf("cannot determine backlog to pass to listen(2): %s", err)
 		}
 	}
-	if err = syscall.Listen(fd, lw.BackLog); err != nil {
+
+	if err = syscall.Listen(fd, backlog); err != nil {
 		return fmt.Errorf("cannot listen on %q: %s", addr, err)
 	}
 	return nil
 }
 
-func (lw *ListenWrapper) NewListenWrapper(network, addr string) (net.Listener, error) { {
+func (lw *ListenWrapper) NewListenWrapper(network, addr string) (net.Listener, error) {
 	socket_addr, soType, err := getSockaddr(network, addr)
 	if err != nil {
 		return nil, err
@@ -75,7 +77,7 @@ func (lw *ListenWrapper) NewListenWrapper(network, addr string) (net.Listener, e
 	name := fmt.Sprintf("reuseport.%d.%s.%s", os.Getpid(), network, addr)
 	file := os.NewFile(uintptr(fd), name)
 	ln, err := net.FileListener(file)
-	
+
 	if err != nil {
 		file.Close()
 		return nil, err
@@ -88,5 +90,3 @@ func (lw *ListenWrapper) NewListenWrapper(network, addr string) (net.Listener, e
 
 	return ln, nil
 }
-
-
